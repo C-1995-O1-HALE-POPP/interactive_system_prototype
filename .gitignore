@@ -1,0 +1,70 @@
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.iml
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 依赖 & 环境变量
+.env*
+*.local
+
+
+# 虚拟环境
+venv/
+env/
+.venv/
+# 依赖缓存
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+# 构建 / 发行
+build/
+dist/
+*.egg-info/
+.eggs/
+# 测试 & 覆盖率
+.coverage
+.tox/
+.pytest_cache/
+# 日志
+*.log
+
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+*.sql
+*.sql.gz
+*.dump
+
+
+frontend/node_modules/
+# 构建产物
+dist/
+build/
+.next/
+out/
+
+# 日志 & 调试
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# 前端测试覆盖率
+coverage/
+# 临时文件
+*.log
+*.tmp
+*.temp
+
+docs/_build/
+.cache/
+tmp/
