@@ -116,6 +116,15 @@ class LLMRequester:
             return True
         except Exception:
             return False
+        
+    def get_status(self) -> Dict[str, Any]:
+        """获取当前 LLM 请求器状态"""
+        return {
+            "base_url": self.base_url,
+            "model": self.model,
+            "api_key_set": bool(self.api_key),
+            "is_available": self.is_available(),
+        }
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 2. PersonaSync 主类
@@ -351,11 +360,21 @@ class EnhancedPersonaSync:
 
 
         # ------ 3. 组装 LLM 消息 --------------------------------------
-        persona_desc = (
-            f"你是一位 {speaker['avatar_type']} 形象的 AI 助手，名字叫 {speaker['name']}。"
-            f"你的性格特征：{', '.join(speaker['personality_traits'])}。"
-            f"沟通风格：{speaker['communication_style']}。请保持一致的口吻。"
-        )
+        # persona_desc = (
+        #     f"你是一位 {speaker['avatar_type']} 形象的 AI 助手，名字叫 {speaker['name']}。"
+        #     f"你的性格特征：{', '.join(speaker['personality_traits'])}。"
+        #     f"沟通风格：{speaker['communication_style']}。请保持一致的口吻。"
+        # )
+        persona_desc = f"""你现在要扮演以下角色进行对话：
+
+角色信息：
+- 姓名：{speaker.get('name', '未知')}
+- 描述：{speaker.get('description', '普通角色')}
+- 性格特征：{', '.join(speaker.get('personality_traits', []))}
+- 交流风格：{speaker.get('communication_style', '自然')}
+- 角色类型：{speaker.get('avatar_type', 'friend')}
+
+请严格按照这个角色的特点进行回复，保持角色的一致性。回复要自然、符合角色设定，并体现出相应的性格特征。"""
 
         # system message
         messages = [
@@ -457,3 +476,106 @@ class EnhancedPersonaSync:
         ]
         resp = self.llm.chat_with_image(messages, temperature=0.6, max_tokens=300)
         return resp["content"].strip()
+    
+
+    def generate_persona_insights(
+        self,
+        persona_data: Dict,
+        interaction_history: List[Dict],
+        model: str = None
+    ) -> Dict[str, Any]:
+        """
+        生成角色洞察
+        
+        Args:
+            persona_data: 角色数据
+            interaction_history: 交互历史
+            model: 使用的模型
+            
+        Returns:
+            角色洞察结果
+        """
+        prompt = f"""基于以下角色信息和交互历史，生成深度的角色洞察分析：
+
+角色信息：
+{json.dumps(persona_data, ensure_ascii=False, indent=2)}
+
+交互历史（最近10条）：
+{json.dumps(interaction_history[-10:], ensure_ascii=False, indent=2)}
+
+请从以下角度进行分析：
+1. 性格特征分析
+2. 情感倾向和模式
+3. 交互风格和偏好
+4. 关系发展趋势
+5. 建议的互动策略
+
+请以JSON格式返回结果，包含：
+- personality_analysis: 性格分析
+- emotional_patterns: 情感模式
+- interaction_style: 交互风格
+- relationship_trends: 关系趋势
+- interaction_suggestions: 互动建议
+- insights_summary: 洞察总结
+
+示例格式：
+{{
+  "personality_analysis": "性格分析内容...",
+  "emotional_patterns": ["模式1", "模式2"],
+  "interaction_style": "交互风格描述...",
+  "relationship_trends": "关系发展趋势...",
+  "interaction_suggestions": ["建议1", "建议2"],
+  "insights_summary": "总结..."
+}}"""
+        
+        try:
+            response = self.llm.chat(
+                prompt=prompt,
+                temperature=0.4
+            )
+            
+            content = response.get("content", "")
+            
+            # 解析JSON响应
+            try:
+                if "```json" in content:
+                    json_start = content.find("```json") + 7
+                    json_end = content.find("```", json_start)
+                    json_content = content[json_start:json_end].strip()
+                elif "{" in content and "}" in content:
+                    json_start = content.find("{")
+                    json_end = content.rfind("}") + 1
+                    json_content = content[json_start:json_end]
+                else:
+                    json_content = content
+                
+                result = json.loads(json_content)
+                
+                # 添加元数据
+                result.update({
+                    "analysis_method": "llm_insights",
+                    "model_used": model or self.llm.model,
+                    "timestamp": datetime.now().isoformat(),
+                    "persona_id": persona_data.get("persona_id"),
+                    "analysis_depth": "comprehensive"
+                })
+                
+                return result
+                
+            except json.JSONDecodeError:
+                logger.warning("角色洞察响应JSON解析失败")
+                return {
+                    "personality_analysis": content,
+                    "emotional_patterns": [],
+                    "interaction_style": "分析中...",
+                    "relationship_trends": "数据收集中...",
+                    "interaction_suggestions": [],
+                    "insights_summary": content[:200] + "...",
+                    "analysis_method": "llm_fallback",
+                    "model_used": model or self.llm.model,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"角色洞察生成失败: {str(e)}")
+            raise

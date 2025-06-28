@@ -16,7 +16,6 @@ from ris_data_model import RISDataModel
 # from enhanced_multimedia_recognizer import EnhancedMultimediaRecognizer
 from enhanced_persona_sync import EnhancedPersonaSync
 from emotion_report_generator import EmotionReportGenerator
-from llm_multimodal_service import bailian_service, llm_service
 
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
@@ -29,32 +28,6 @@ report_generator = EmotionReportGenerator("ris_system.db")
 
 print("RIS系统后端启动中...")
 
-def persona_insights(user_id, persona_id):
-    """LLM生成角色洞察"""
-    try:
-        # 获取角色数据
-        personas = ris_model.get_personas(user_id)
-        persona_data = None
-        for p in personas:
-            if p['persona_id'] == persona_id:
-                persona_data = p
-                break
-        
-        if not persona_data:
-            return jsonify({'success': False, 'error': '角色不存在'}), 404
-        
-        # 获取交互历史
-        interaction_history = ris_model.get_interaction_logs(user_id, limit=20)
-        
-        result = bailian_service.generate_persona_insights(
-            persona_data=persona_data,
-            interaction_history=interaction_history
-        )
-        
-        return jsonify({'success': True, 'result': result})
-        
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -74,7 +47,7 @@ def health_check():
                     'EmotionReportGenerator',
                     'BailianDeepSeekService'
                 ],
-                'llm_service_status': llm_service.get_service_status()
+                'llm_service_status': persona_sync.llm.get_status()
             }
         }
         return jsonify(stats)
@@ -226,7 +199,30 @@ def get_user_personas(user_id):
 @app.route('/api/personas/<user_id>/<persona_id>/insights', methods=['GET'])
 def get_persona_insights(user_id, persona_id):
     """获取角色洞察"""
-    return persona_insights(user_id, persona_id)
+    try:
+        # 获取角色数据
+        personas = ris_model.get_personas(user_id)
+        persona_data = None
+        for p in personas:
+            if p['persona_id'] == persona_id:
+                persona_data = p
+                break
+        
+        if not persona_data:
+            return jsonify({'success': False, 'error': '角色不存在'}), 404
+        
+        # 获取交互历史
+        interaction_history = ris_model.get_interaction_logs(user_id, limit=20)
+        
+        result = persona_sync.generate_persona_insights(
+            persona_data=persona_data,
+            interaction_history=interaction_history
+        )
+        
+        return jsonify({'success': True, 'result': result})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/memories/<user_id>', methods=['GET'])
 def get_user_memories(user_id):
@@ -327,45 +323,6 @@ def get_system_info():
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# 百炼平台DeepSeek LLM相关端点
-@app.route('/api/llm/status', methods=['GET'])
-def get_llm_status():
-    """获取LLM服务状态"""
-    try:
-        status = llm_service.get_service_status()
-        return jsonify({'success': True, 'status': status})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/llm/emotion_analysis', methods=['POST'])
-def llm_emotion_analysis():
-    """LLM增强情感分析"""
-    try:
-        data = request.get_json()
-        text = data.get('text', '')
-        context = data.get('context')
-        model = data.get('model')
-        
-        if not text:
-            return jsonify({'success': False, 'error': '缺少分析文本'}), 400
-        
-        result = bailian_service.analyze_emotion_with_llm(
-            text=text,
-            context=context,
-            model=model
-        )
-        
-        return jsonify({'success': True, 'result': result})
-        
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/llm/persona_insights/<user_id>/<persona_id>', methods=['GET'])
-def llm_persona_insights(user_id, persona_id):
-    return persona_insights(user_id, persona_id)
 
 
 # 错误处理
